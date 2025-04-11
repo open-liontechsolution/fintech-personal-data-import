@@ -40,9 +40,10 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^11.0.1",
-    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/github": "^8.0.7",
+    "@semantic-release/npm": "^9.0.2",
     "@types/amqplib": "^0.10.1",
     "@types/express": "^4.17.17",
     "@types/jest": "^29.5.3",
@@ -53,13 +54,16 @@
     "@typescript-eslint/parser": "^6.2.0",
     "eslint": "^8.46.0",
     "jest": "^29.6.2",
-    "semantic-release": "^24.2.3",
+    "semantic-release": "^19.0.5",
     "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.1.6"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/fintech-personal-data-import/issues"
+    "url": "https://github.com/open-liontechsolution/fintech-personal-data-import/issues"
   },
-  "homepage": "https://github.com/yourusername/fintech-personal-data-import#readme"
+  "homepage": "https://github.com/open-liontechsolution/fintech-personal-data-import#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

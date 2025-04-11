@@ -104,13 +104,16 @@ The service is designed to be deployed in a Kubernetes (k3s) cluster with the fo
 
 ### Prerequisites
 
-- Node.js 16+
+- Node.js 18.0.0 o superior
 - Access to RabbitMQ and MongoDB services
 - Verdaccio for accessing private npm packages
 
 ### Setup
 
 ```bash
+# Verificar versión de Node.js (debe ser ≥ 18.0.0)
+node --version
+
 # Install dependencies
 npm install
 
