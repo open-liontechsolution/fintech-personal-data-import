@@ -1,0 +1,24 @@
+{
+  "branches": ["main", {"name": "develop", "prerelease": true}],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/changelog", {
+      "changelogFile": "CHANGELOG.md"
+    }],
+    ["@semantic-release/npm", {
+      "pkgRoot": ".",
+      "npmPublish": false
+    }],
+    ["@semantic-release/github", {
+      "assets": [
+        {"path": "dist/**/*.js", "label": "Distribución JS"},
+        {"path": "dist/**/*.d.ts", "label": "Tipados TypeScript"}
+      ]
+    }],
+    ["@semantic-release/git", {
+      "assets": ["package.json", "package-lock.json", "CHANGELOG.md"],
+      "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+    }]
+  ]
+}

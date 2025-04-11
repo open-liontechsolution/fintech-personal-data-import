@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fintech-personal-data-import-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/yourusername/fintech-personal-data-import.git
+    targetRevision: HEAD
+    path: helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fintech-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
