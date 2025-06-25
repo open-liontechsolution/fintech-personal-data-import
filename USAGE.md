@@ -305,3 +305,56 @@ curl http://localhost:3001/metrics
 1. Verificar que las filas no estén vacías
 2. Revisar logs para errores específicos
 3. Comprobar que el formato de fecha/números sea válido para el banco
+
+## ⚙️ Funcionalidad Auto-Delete
+
+### Configuración de Eliminación Automática
+
+El servicio soporta eliminación automática de archivos después del procesamiento exitoso.
+
+**Variable de entorno:**
+```bash
+DELETE_AFTER_PROCESSING=true    # Habilitar auto-delete
+DELETE_AFTER_PROCESSING=false   # Deshabilitar (por defecto)
+```
+
+**Condiciones para eliminación:**
+- ✅ Estado de procesamiento: `completed`
+- ✅ Importación 100% exitosa: `importedRows === totalRows`
+- ✅ Al menos 1 fila procesada: `totalRows > 0`
+- ✅ Variable de entorno habilitada: `DELETE_AFTER_PROCESSING=true`
+
+### Test de Auto-Delete
+
+```bash
+# Test completo de auto-delete (recomendado)
+node scripts/test_auto_delete.js
+
+# Test manual paso a paso:
+# 1. Subir archivo
+curl -X POST -F "file=@example/movements-242025.xls" \
+     -F "userId=test-user" -F "bankName=ING" \
+     http://localhost:3001/upload
+
+# 2. Verificar archivo en GridFS
+node scripts/verify_gridfs_upload.js [fileId]
+
+# 3. Procesar archivo
+node scripts/send_rabbitmq_message.js [fileId] [fileName]
+
+# 4. Verificar eliminación
+node scripts/verify_gridfs_upload.js [fileId]  # Debe retornar 0 archivos
+```
+
+### Scripts de Verificación
+
+```bash
+# Verificar archivos en GridFS
+node scripts/verify_gridfs_upload.js                # Lista todos
+node scripts/verify_gridfs_upload.js [fileId]       # Busca específico
+
+# Enviar mensaje RabbitMQ para procesamiento
+node scripts/send_rabbitmq_message.js [fileId] [fileName]
+
+# Test completo de entorno desde cero
+./scripts/init-test-env.sh

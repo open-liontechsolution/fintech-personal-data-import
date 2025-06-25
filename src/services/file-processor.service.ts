@@ -107,10 +107,40 @@ class FileProcessorService {
 
       logger.info({
         importId,
-        totalRows: result.totalRows,
+        fileId,
+        fileName,
+        fileType,
         importedRows: result.importedRows,
-        failedRows: result.failedRows
+        totalRows: result.totalRows,
+        successRate: ((result.importedRows / result.totalRows) * 100).toFixed(2) + '%'
       }, 'Procesamiento de archivo completado');
+
+      // Eliminar archivo de GridFS si está configurado y el procesamiento fue 100% exitoso
+      if (config.processing.deleteAfterProcessing && 
+          result.status === 'completed' && 
+          result.importedRows === result.totalRows && 
+          result.totalRows > 0) {
+        
+        try {
+          await this.deleteFileFromGridFS(fileId);
+          logger.info({ importId, fileId, fileName }, 'Archivo eliminado de GridFS después del procesamiento exitoso');
+        } catch (deleteError) {
+          // Log el error pero no fallar todo el procesamiento por esto
+          logger.warn({ 
+            error: deleteError, 
+            importId, 
+            fileId, 
+            fileName 
+          }, 'Error al eliminar archivo de GridFS después del procesamiento - archivo procesado exitosamente pero no se pudo eliminar');
+        }
+      } else if (config.processing.deleteAfterProcessing) {
+        logger.info({ 
+          importId, 
+          fileId, 
+          status: result.status,
+          successRate: result.totalRows > 0 ? ((result.importedRows / result.totalRows) * 100).toFixed(2) + '%' : '0%'
+        }, 'Archivo NO eliminado de GridFS: procesamiento no fue 100% exitoso o no hay filas procesadas');
+      }
 
       return result;
     } catch (error) {
@@ -442,37 +472,85 @@ class FileProcessorService {
   }
 
   /**
-   * Descarga un archivo desde la colección uploaded_files (alternativa a GridFS)
+   * Descarga un archivo desde GridFS
    */
   private async downloadFileFromGridFS(fileId: string, destinationPath: string): Promise<void> {
     const db = MongoDBService.getDB();
-    const filesCollection = db.collection('uploaded_files');
+    const bucket = new GridFSBucket(db, { bucketName: 'fs' });
     
     try {
-      // Buscar el archivo por ObjectId
-      const file = await filesCollection.findOne({ _id: new ObjectId(fileId) });
+      // Verificar que el archivo existe en GridFS
+      const files = await db.collection('fs.files').find({ 
+        _id: new ObjectId(fileId) 
+      }).toArray();
       
-      if (!file) {
-        throw new AppError(`Archivo no encontrado: ${fileId}`, 404);
+      if (files.length === 0) {
+        throw new AppError(`Archivo no encontrado en GridFS: ${fileId}`, 404);
       }
       
-      if (!file.data) {
-        throw new AppError(`Archivo sin datos: ${fileId}`, 400);
-      }
+      const file = files[0];
       
-      // Convertir de base64 a buffer
-      const fileBuffer = Buffer.from(file.data, 'base64');
+      // Crear stream de descarga desde GridFS
+      const downloadStream = bucket.openDownloadStream(new ObjectId(fileId));
+      const writeStream = fs.createWriteStream(destinationPath);
       
-      // Escribir archivo al destino
-      fs.writeFileSync(destinationPath, fileBuffer);
+      // Usar promesa para esperar la descarga completa
+      await new Promise<void>((resolve, reject) => {
+        downloadStream.on('error', reject);
+        writeStream.on('error', reject);
+        writeStream.on('finish', resolve);
+        
+        downloadStream.pipe(writeStream);
+      });
       
-      logger.info(`Archivo descargado: ${file.filename} (${fileBuffer.length} bytes) -> ${destinationPath}`);
+      logger.info({ 
+        fileId, 
+        fileName: file.filename, 
+        size: file.length,
+        destinationPath 
+      }, 'Archivo descargado desde GridFS exitosamente');
       
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
-      throw new AppError(`Error al descargar archivo: ${error instanceof Error ? error.message : String(error)}`, 500);
+      throw new AppError(`Error al descargar archivo desde GridFS: ${error instanceof Error ? error.message : String(error)}`, 500);
+    }
+  }
+
+  /**
+   * Elimina un archivo de GridFS
+   */
+  private async deleteFileFromGridFS(fileId: string): Promise<void> {
+    const db = MongoDBService.getDB();
+    const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+    
+    try {
+      // Verificar que el archivo existe antes de intentar eliminarlo
+      const files = await db.collection('fs.files').find({ 
+        _id: new ObjectId(fileId) 
+      }).toArray();
+      
+      if (files.length === 0) {
+        throw new AppError(`Archivo no encontrado en GridFS: ${fileId}`, 404);
+      }
+      
+      const file = files[0];
+      
+      // Eliminar archivo usando GridFSBucket
+      await bucket.delete(new ObjectId(fileId));
+      
+      logger.info({ 
+        fileId, 
+        fileName: file.filename, 
+        size: file.length 
+      }, 'Archivo eliminado de GridFS exitosamente');
+      
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(`Error al eliminar archivo de GridFS: ${error instanceof Error ? error.message : String(error)}`, 500);
     }
   }
 

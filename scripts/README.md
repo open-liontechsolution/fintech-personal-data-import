@@ -52,12 +52,58 @@ Simula el proceso completo de importación con detección automática de banco.
 - ✅ Estadísticas detalladas del archivo
 - ✅ Análisis de tipos de datos
 
-### 5. `universal-file-analyzer.js` ⭐ **ANALIZADOR UNIVERSAL**
+### 5. `send_rabbitmq_message.js` ⭐ **TRIGGER MANUAL**
+Envía mensajes RabbitMQ para procesar archivos específicos ya subidos.
+
+**Características:**
+- ✅ Parámetros configurables por línea de comandos
+- ✅ Verificación del estado de la cola
+- ✅ Logs detallados del proceso
+- ✅ Conexión y configuración automática de RabbitMQ
+
+**Uso:**
+```bash
+node scripts/send_rabbitmq_message.js [fileId] [fileName]
+node scripts/send_rabbitmq_message.js 685c71b9a04286b13bac34b0 movements.xls
+```
+
+### 6. `test_auto_delete.js` ⭐ **TEST AUTO-DELETE**
+Test completo del sistema de eliminación automática de archivos después del procesamiento.
+
+**Características:**
+- ✅ Test end-to-end de auto-delete
+- ✅ Reinicio automático de servicios con configuración
+- ✅ Upload, procesamiento y verificación de eliminación
+- ✅ Verificación de integridad de datos
+- ✅ Configuración automática DELETE_AFTER_PROCESSING=true
+
+**Uso:**
+```bash
+node scripts/test_auto_delete.js    # Test completo de auto-delete
+```
+
+### 7. `verify_gridfs_upload.js` ⭐ **VERIFICACIÓN GRIDFS**
+Verifica archivos subidos en MongoDB GridFS y su estado.
+
+**Características:**
+- ✅ Lista todos los archivos en GridFS
+- ✅ Busca archivos específicos por ID
+- ✅ Muestra metadata completa
+- ✅ Verifica integridad de archivos
+- ✅ Información de tamaño y chunks
+
+**Uso:**
+```bash
+node scripts/verify_gridfs_upload.js           # Lista todos los archivos
+node scripts/verify_gridfs_upload.js [fileId]  # Busca archivo específico
+```
+
+### 8. `universal-file-analyzer.js` ⭐ **ANALIZADOR UNIVERSAL**
 Analizador universal que maneja múltiples formatos automáticamente.
 
 ## 🛠️ Scripts de Debugging
 
-### 6. `verify-import-data.js` ✅ **VERIFICACIÓN POST-IMPORT**
+### 9. `verify-import-data.js` ✅ **VERIFICACIÓN POST-IMPORT**
 Verifica que los datos se importaron correctamente en MongoDB.
 
 **Características:**
@@ -71,7 +117,7 @@ Verifica que los datos se importaron correctamente en MongoDB.
 node scripts/verify-import-data.js
 ```
 
-### 7. `debug-excel.js` ✅ **DEBUG EXCEL ESPECÍFICO**
+### 10. `debug-excel.js` ✅ **DEBUG EXCEL ESPECÍFICO**
 Debuggea problemas específicos con archivos Excel.
 
 **Características:**
@@ -85,7 +131,7 @@ Debuggea problemas específicos con archivos Excel.
 node scripts/debug-excel.js
 ```
 
-### 8. `test-xlsx-library.js` ✅ **TEST LIBRERÍAS EXCEL**
+### 11. `test-xlsx-library.js` ✅ **TEST LIBRERÍAS EXCEL**
 Prueba diferentes librerías para procesar Excel.
 
 **Características:**

@@ -1,5 +1,8 @@
 import express from 'express';
 import { createServer } from 'http';
+import multer from 'multer';
+import { GridFSBucket, ObjectId } from 'mongodb';
+import { v4 as uuidv4 } from 'uuid';
 import config from './config/config';
 import logger from './utils/logger';
 import { RabbitMQService, MongoDBService } from './services';
@@ -46,6 +49,123 @@ class DataImportApp {
    * Configura las rutas básicas
    */
   private setupRoutes(): void {
+    // Configurar multer para archivos en memoria (luego los pasamos a GridFS)
+    const upload = multer({ 
+      storage: multer.memoryStorage(),
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB máximo
+      },
+      fileFilter: (req, file, cb) => {
+        // Aceptar archivos Excel, CSV y texto
+        const allowedMimes = [
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'text/csv',
+          'text/plain',
+          'application/octet-stream'
+        ];
+        
+        const allowedExtensions = ['.xls', '.xlsx', '.csv', '.txt'];
+        const hasValidExtension = allowedExtensions.some(ext => 
+          file.originalname.toLowerCase().endsWith(ext)
+        );
+        
+        if (allowedMimes.includes(file.mimetype) || hasValidExtension) {
+          cb(null, true);
+        } else {
+          cb(new Error(`Tipo de archivo no soportado: ${file.mimetype}. Formatos permitidos: Excel (.xls, .xlsx), CSV (.csv), Text (.txt)`));
+        }
+      }
+    });
+
+    // Upload endpoint
+    this.app.post('/upload', upload.single('file'), async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            error: 'No file provided',
+            message: 'Please provide a file using the "file" field',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        const db = MongoDBService.getDB();
+        if (!db) {
+          throw new Error('Database not connected');
+        }
+
+        // Usar GridFS para almacenar el archivo
+        const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+        
+        // Generar ID único para el archivo
+        const fileId = new ObjectId();
+        const uploadId = uuidv4();
+
+        // Metadata del archivo
+        const metadata = {
+          uploadId,
+          originalName: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          uploadedAt: new Date(),
+          userId: req.body.userId || 'anonymous', // Opcional desde el form
+          bankName: req.body.bankName || 'unknown', // Opcional desde el form
+          description: req.body.description || '',
+        };
+
+        // Crear stream de upload a GridFS
+        const uploadStream = bucket.openUploadStreamWithId(fileId, req.file.originalname, {
+          metadata
+        });
+
+        // Promesa para manejar la subida
+        const uploadPromise = new Promise<ObjectId>((resolve, reject) => {
+          uploadStream.on('error', reject);
+          uploadStream.on('finish', () => {
+            logger.info({
+              fileId: fileId.toString(),
+              uploadId,
+              fileName: req.file!.originalname,
+              size: req.file!.size
+            }, 'File uploaded to GridFS successfully');
+            resolve(fileId);
+          });
+        });
+
+        // Escribir el buffer al stream
+        uploadStream.end(req.file.buffer);
+
+        // Esperar a que se complete la subida
+        await uploadPromise;
+
+        // Respuesta exitosa (SIN enviar mensaje a RabbitMQ)
+        res.status(201).json({
+          success: true,
+          message: 'File uploaded successfully',
+          data: {
+            fileId: fileId.toString(),
+            uploadId,
+            fileName: req.file.originalname,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            uploadedAt: metadata.uploadedAt.toISOString(),
+            metadata
+          },
+          note: 'File is stored in GridFS but not yet queued for processing. Use RabbitMQ to trigger processing.',
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (error) {
+        logger.error({ error, fileName: req.file?.originalname }, 'Error uploading file');
+        
+        res.status(500).json({
+          error: 'Upload failed',
+          message: error instanceof Error ? error.message : 'Unknown error occurred',
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
     // Health check endpoint
     this.app.get('/health', async (req, res) => {
       try {

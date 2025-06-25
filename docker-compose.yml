@@ -52,6 +52,7 @@ services:
       RABBITMQ_ERROR_ROUTING_KEY: file.import.error
       RABBITMQ_STATUS_ROUTING_KEY: file.import.status
       MAX_CONCURRENT_PROCESSING: 3
+      DELETE_AFTER_PROCESSING: true
       TEMP_FILES_DIR: /app/tmp
     depends_on:
       - mongodb

@@ -32,6 +32,18 @@ The `data-import` service follows a modern microservices architecture designed t
 5. **Error Handling**: Provides robust error handling with standardized responses
 6. **Authentication Integration**: Processes files in the context of the user who uploaded them
 
+## Features
+
+- ✅ **Multi-format Support**: Handles CSV and Excel files (.xls, .xlsx)
+- ✅ **Bank Integration**: Supports multiple Spanish banks (ING, Santander, BBVA, etc.)
+- ✅ **Data Validation**: Comprehensive validation of transaction data
+- ✅ **Error Handling**: Robust error handling with detailed logging
+- ✅ **RabbitMQ Integration**: Event-driven architecture with message queuing
+- ✅ **MongoDB Storage**: Efficient storage using GridFS and collections
+- ✅ **Auto-Delete**: Automatic file cleanup after successful processing
+- ✅ **Docker Support**: Full containerization with docker-compose
+- ✅ **Testing Suite**: Comprehensive testing tools and scripts
+
 ## Connections and Dependencies
 
 The `data-import` service interacts with several other components:
