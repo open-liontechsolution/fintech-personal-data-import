@@ -1,70 +1,45 @@
+import { FileUploadedEvent } from 'fintech-personal-common';
+import { ImportSummary } from '../models/raw-import.model';
 /**
- * Resultado del procesamiento de un archivo
- */
-interface ProcessingResult {
-    recordsProcessed: number;
-    recordsImported: number;
-    recordsRejected: number;
-    errors?: Array<{
-        rowNumber?: number;
-        message: string;
-    }>;
-}
-/**
- * Opciones de importación
- */
-interface ImportOptions {
-    hasHeaders?: boolean;
-    delimiter?: string;
-    sheet?: string | number;
-    mapping?: Record<string, string>;
-    skipRows?: number;
-}
-/**
- * Servicio para procesar archivos desde GridFS
+ * Servicio para procesar archivos desde GridFS e importar datos crudos a MongoDB
  */
 declare class FileProcessorService {
     private tempDir;
+    private BATCH_SIZE;
     constructor();
     /**
      * Procesa un archivo desde GridFS
-     * @param fileId ID del archivo en GridFS
-     * @param fileName Nombre original del archivo
-     * @param fileType Tipo MIME del archivo
-     * @param userId ID del usuario que subió el archivo
-     * @param importId ID único para esta importación
-     * @param options Opciones de importación
-     * @returns Resultado del procesamiento
      */
-    processFile(fileId: string, fileName: string, fileType: string, userId: string, importId: string, options?: ImportOptions): Promise<ProcessingResult>;
-    /**
-     * Descarga un archivo desde GridFS
-     * @param fileId ID del archivo en GridFS
-     * @param destinationPath Ruta donde guardar el archivo
-     */
-    private downloadFileFromGridFS;
-    /**
-     * Elimina un archivo de GridFS
-     * @param fileId ID del archivo en GridFS
-     */
-    private deleteFileFromGridFS;
+    processFile(event: FileUploadedEvent): Promise<ImportSummary>;
     /**
      * Procesa un archivo CSV
-     * @param filePath Ruta al archivo CSV
-     * @param userId ID del usuario
-     * @param importId ID de la importación
-     * @param options Opciones de importación
-     * @returns Resultado del procesamiento
      */
     private processCSV;
     /**
      * Procesa un archivo Excel
-     * @param filePath Ruta al archivo Excel
-     * @param userId ID del usuario
-     * @param importId ID de la importación
-     * @param options Opciones de importación
-     * @returns Resultado del procesamiento
      */
     private processExcel;
+    /**
+     * Guarda datos crudos en MongoDB
+     */
+    private saveRawImports;
+    /**
+     * Guarda o actualiza el resumen de importación
+     */
+    private saveSummary;
+    /**
+     * Descarga un archivo desde la colección uploaded_files (alternativa a GridFS)
+     */
+    private downloadFileFromGridFS;
+    /**
+     * Obtiene el tipo MIME basado en la extensión del archivo
+     */
+    private getMimeType;
+    /**
+     * Detecta el banco basado en el nombre del archivo
+     */
+    private detectBankFromFileName;
+    private detectBankFromContent;
+    private saveRawDataBatch;
 }
 export default FileProcessorService;

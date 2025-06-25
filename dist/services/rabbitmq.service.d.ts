@@ -11,8 +11,7 @@ declare class RabbitMQService {
      */
     initialize(): Promise<void>;
     /**
-     * Maneja los mensajes recibidos del exchange
-     * @param message Mensaje recibido
+     * Procesa un mensaje de archivo subido
      */
     private handleMessage;
     /**
@@ -39,6 +38,17 @@ declare class RabbitMQService {
     /**
      * Cierra la conexión con RabbitMQ
      */
+    disconnect(): Promise<void>;
+    /**
+     * Alias para disconnect (mantener compatibilidad)
+     */
     close(): Promise<void>;
+    /**
+     * Verifica el estado de la conexión con RabbitMQ
+     */
+    healthCheck(): Promise<{
+        status: string;
+        connected?: boolean;
+    }>;
 }
 export default RabbitMQService;

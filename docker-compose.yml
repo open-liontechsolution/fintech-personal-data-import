@@ -1,0 +1,71 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: fintech-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: fintech
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - fintech-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: fintech-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - fintech-network
+
+  data-import:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fintech-data-import
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      LOG_LEVEL: debug
+      MONGODB_URI: mongodb://admin:admin123@mongodb:27017/fintech?authSource=admin
+      MONGODB_DB_NAME: fintech
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: fintech-events
+      RABBITMQ_EXCHANGE_TYPE: topic
+      RABBITMQ_QUEUE: file-import-queue
+      RABBITMQ_ROUTING_KEY: file.uploaded
+      RABBITMQ_ERROR_QUEUE: file-import-error-queue
+      RABBITMQ_ERROR_ROUTING_KEY: file.import.error
+      RABBITMQ_STATUS_ROUTING_KEY: file.import.status
+      MAX_CONCURRENT_PROCESSING: 3
+      TEMP_FILES_DIR: /app/tmp
+    depends_on:
+      - mongodb
+      - rabbitmq
+    volumes:
+      - ./src:/app/src
+      - ./tmp:/app/tmp
+    networks:
+      - fintech-network
+
+volumes:
+  mongodb_data:
+  rabbitmq_data:
+
+networks:
+  fintech-network:
+    driver: bridge

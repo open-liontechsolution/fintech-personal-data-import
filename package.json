@@ -36,8 +36,8 @@
     "multer-gridfs-storage": "^5.0.2",
     "pino": "^8.14.1",
     "pino-pretty": "^10.2.0",
-    "read-excel-file": "^5.6.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

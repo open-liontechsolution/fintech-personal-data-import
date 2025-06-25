@@ -51,13 +51,66 @@ class MongoDBService {
   /**
    * Cierra la conexión con MongoDB
    */
-  async close(): Promise<void> {
+  async disconnect(): Promise<void> {
     if (this.client) {
       await this.client.close();
       this.client = null;
       this.db = null;
       this.gridFSBucket = null;
       logger.info('Conexión con MongoDB cerrada');
+    }
+  }
+
+  /**
+   * Alias para disconnect (mantener compatibilidad)
+   */
+  async close(): Promise<void> {
+    await this.disconnect();
+  }
+
+  /**
+   * Verifica el estado de la conexión con MongoDB
+   */
+  async healthCheck(): Promise<{ status: string; latency?: number }> {
+    try {
+      if (!this.client || !this.db) {
+        return { status: 'disconnected' };
+      }
+
+      const start = Date.now();
+      await this.db.admin().ping();
+      const latency = Date.now() - start;
+
+      return { 
+        status: 'connected',
+        latency 
+      };
+    } catch (error) {
+      logger.error({ error }, 'Error en health check de MongoDB');
+      return { status: 'error' };
+    }
+  }
+
+  /**
+   * Verifica si está conectado
+   */
+  isConnected(): boolean {
+    return !!(this.client && this.db && this.gridFSBucket);
+  }
+
+  /**
+   * Obtiene estadísticas de la base de datos
+   */
+  async getStats(): Promise<any> {
+    if (!this.db) {
+      throw new Error('MongoDB no está conectado');
+    }
+    
+    try {
+      return await this.db.stats();
+    } catch (error) {
+      logger.error({ error }, 'Error al obtener estadísticas de MongoDB');
+      throw error;
     }
   }
 }

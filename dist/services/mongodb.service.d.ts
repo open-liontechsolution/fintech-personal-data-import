@@ -21,7 +21,26 @@ declare class MongoDBService {
     /**
      * Cierra la conexión con MongoDB
      */
+    disconnect(): Promise<void>;
+    /**
+     * Alias para disconnect (mantener compatibilidad)
+     */
     close(): Promise<void>;
+    /**
+     * Verifica el estado de la conexión con MongoDB
+     */
+    healthCheck(): Promise<{
+        status: string;
+        latency?: number;
+    }>;
+    /**
+     * Verifica si está conectado
+     */
+    isConnected(): boolean;
+    /**
+     * Obtiene estadísticas de la base de datos
+     */
+    getStats(): Promise<any>;
 }
 declare const _default: MongoDBService;
 export default _default;

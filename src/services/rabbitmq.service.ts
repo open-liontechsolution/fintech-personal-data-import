@@ -50,86 +50,87 @@ class RabbitMQService {
   }
 
   /**
-   * Maneja los mensajes recibidos del exchange
-   * @param message Mensaje recibido
+   * Procesa un mensaje de archivo subido
    */
   private async handleMessage(message: FileUploadedEvent): Promise<void> {
-    const { fileId, fileName, fileType, userId, importOptions } = message.data;
-    const importId = uuidv4();
+    const { fileId, fileName, userId } = message.data;
     
     logger.info({
-      importId,
+      eventId: message.eventId,
       fileId,
       fileName,
-      fileType,
       userId,
-    }, 'Recibida solicitud de procesamiento de archivo');
-
+    }, 'Procesando mensaje de archivo subido');
+    
     try {
-      // Enviar estado inicial de procesamiento
+      // Enviar actualización de estado inicial
       await this.sendStatusUpdate({
-        importId,
         fileId,
-        userId,
+        importId: message.eventId, // Usar eventId como importId temporal
         status: 'processing',
         progress: 0,
-        message: 'Iniciando procesamiento',
-        result: {
-          recordsProcessed: 0,
-          recordsImported: 0,
-          recordsRejected: 0,
-        },
-      });
-
-      // Procesar el archivo
-      const result = await this.fileProcessor.processFile(fileId, fileName, fileType, userId, importId, importOptions);
-      
-      // Enviar estado final de procesamiento
-      await this.sendStatusUpdate({
-        importId,
-        fileId,
+        message: 'Iniciando procesamiento de archivo',
         userId,
-        status: 'completed',
+      });
+      
+      // Procesar archivo
+      const result = await this.fileProcessor.processFile(message);
+      
+      // Enviar actualización de estado final
+      await this.sendStatusUpdate({
+        fileId,
+        importId: result.importId,
+        status: result.status,
         progress: 100,
-        message: 'Procesamiento completado con éxito',
+        message: `Procesamiento completado: ${result.importedRows} registros importados`,
+        userId,
         result: {
-          recordsProcessed: result.recordsProcessed,
-          recordsImported: result.recordsImported,
-          recordsRejected: result.recordsRejected,
-          errors: result.errors,
+          recordsProcessed: result.totalRows,
+          recordsImported: result.importedRows,
+          recordsRejected: result.failedRows,
+          errors: result.errors.map(err => ({
+            rowNumber: err.rowNumber,
+            message: err.message || err.error || 'Error desconocido'
+          }))
         },
       });
       
       logger.info({
-        importId,
+        importId: result.importId,
         fileId,
-        recordsProcessed: result.recordsProcessed,
-        recordsImported: result.recordsImported,
-      }, 'Archivo procesado con éxito');
+        totalRows: result.totalRows,
+        importedRows: result.importedRows,
+        failedRows: result.failedRows,
+      }, 'Archivo procesado exitosamente');
+      
     } catch (error) {
       logger.error({
-        importId,
-        fileId,
         error,
+        fileId,
+        fileName,
       }, 'Error al procesar archivo');
       
-      // Enviar estado de error
+      // Enviar actualización de error
       await this.sendStatusUpdate({
-        importId,
         fileId,
-        userId,
+        importId: message.eventId,
         status: 'failed',
         progress: 0,
-        message: `Error al procesar archivo: ${(error as Error).message}`,
+        message: error instanceof Error ? error.message : 'Error desconocido',
+        userId,
         result: {
           recordsProcessed: 0,
           recordsImported: 0,
           recordsRejected: 0,
           errors: [{
-            message: (error as Error).message,
-          }],
+            rowNumber: undefined,
+            message: error instanceof Error ? error.message : 'Error desconocido'
+          }]
         },
       });
+      
+      // Re-lanzar el error para que RabbitMQ maneje el reintento
+      throw error;
     }
   }
 
@@ -198,12 +199,40 @@ class RabbitMQService {
   /**
    * Cierra la conexión con RabbitMQ
    */
-  async close(): Promise<void> {
+  async disconnect(): Promise<void> {
     if (this.consumerTag) {
       await this.client.cancelConsumer(this.consumerTag);
+      this.consumerTag = null;
     }
     await this.client.close();
     logger.info('Conexión con RabbitMQ cerrada');
+  }
+
+  /**
+   * Alias para disconnect (mantener compatibilidad)
+   */
+  async close(): Promise<void> {
+    await this.disconnect();
+  }
+
+  /**
+   * Verifica el estado de la conexión con RabbitMQ
+   */
+  async healthCheck(): Promise<{ status: string; connected?: boolean }> {
+    try {
+      // Verificar si el cliente está inicializado
+      const isConnected = this.client !== null;
+      return {
+        status: isConnected ? 'connected' : 'disconnected',
+        connected: isConnected
+      };
+    } catch (error) {
+      logger.error({ error }, 'Error en health check de RabbitMQ');
+      return {
+        status: 'error',
+        connected: false
+      };
+    }
   }
 }
 
