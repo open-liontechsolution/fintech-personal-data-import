@@ -36,16 +36,11 @@ jobs:
           echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
           echo "always-auth=false" >> .npmrc
 
-      - name: Install ESLint dependencies only
-        run: |
-          npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
-          cp -r node_modules node_modules_eslint
+      - name: Install dependencies
+        run: npm ci
 
       - name: Lint code
         run: npm run lint
-        
-      - name: Install full dependencies
-        run: npm ci
 
   test:
     needs: validate
@@ -268,7 +263,7 @@ jobs:
           body: |
             ## Changes in this Release
             
-            🚀 **Production Release** of fintech-personal-data-import
+            **Production Release** of fintech-personal-data-import
             
             ### Docker Image
             ```
@@ -283,9 +278,9 @@ jobs:
             - Auto-delete functionality for processed files
             
             ### Security
-            - ✅ Security vulnerabilities scanned
-            - ✅ Container image scanned with Trivy
-            - ✅ Dependencies audited
+            - Security vulnerabilities scanned
+            - Container image scanned with Trivy
+            - Dependencies audited
             
             For detailed usage instructions, see [USAGE.md](./USAGE.md)
           draft: false
@@ -321,7 +316,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .
-          git commit -m "🚀 Deploy fintech-personal-data-import ${IMAGE_TAG} to production" || exit 0
+          git commit -m "Deploy fintech-personal-data-import ${IMAGE_TAG} to production" || exit 0
           git push
 
       - name: Create deployment notification
