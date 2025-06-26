@@ -28,9 +28,13 @@ declare class FileProcessorService {
      */
     private saveSummary;
     /**
-     * Descarga un archivo desde la colección uploaded_files (alternativa a GridFS)
+     * Descarga un archivo desde GridFS
      */
     private downloadFileFromGridFS;
+    /**
+     * Elimina un archivo de GridFS
+     */
+    private deleteFileFromGridFS;
     /**
      * Obtiene el tipo MIME basado en la extensión del archivo
      */

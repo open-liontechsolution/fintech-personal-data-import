@@ -40,7 +40,7 @@ const mongodb_1 = require("mongodb");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const csv_parser_1 = __importDefault(require("csv-parser"));
-const node_1 = __importDefault(require("read-excel-file/node"));
+const XLSX = __importStar(require("xlsx"));
 const uuid_1 = require("uuid");
 const fintech_personal_common_1 = require("fintech-personal-common");
 const mongodb_service_1 = __importDefault(require("./mongodb.service"));
@@ -133,10 +133,40 @@ class FileProcessorService {
             await this.saveSummary(result);
             logger_1.default.info({
                 importId,
-                totalRows: result.totalRows,
+                fileId,
+                fileName,
+                fileType,
                 importedRows: result.importedRows,
-                failedRows: result.failedRows
+                totalRows: result.totalRows,
+                successRate: ((result.importedRows / result.totalRows) * 100).toFixed(2) + '%'
             }, 'Procesamiento de archivo completado');
+            // Eliminar archivo de GridFS si está configurado y el procesamiento fue 100% exitoso
+            if (config_1.default.processing.deleteAfterProcessing &&
+                result.status === 'completed' &&
+                result.importedRows === result.totalRows &&
+                result.totalRows > 0) {
+                try {
+                    await this.deleteFileFromGridFS(fileId);
+                    logger_1.default.info({ importId, fileId, fileName }, 'Archivo eliminado de GridFS después del procesamiento exitoso');
+                }
+                catch (deleteError) {
+                    // Log el error pero no fallar todo el procesamiento por esto
+                    logger_1.default.warn({
+                        error: deleteError,
+                        importId,
+                        fileId,
+                        fileName
+                    }, 'Error al eliminar archivo de GridFS después del procesamiento - archivo procesado exitosamente pero no se pudo eliminar');
+                }
+            }
+            else if (config_1.default.processing.deleteAfterProcessing) {
+                logger_1.default.info({
+                    importId,
+                    fileId,
+                    status: result.status,
+                    successRate: result.totalRows > 0 ? ((result.importedRows / result.totalRows) * 100).toFixed(2) + '%' : '0%'
+                }, 'Archivo NO eliminado de GridFS: procesamiento no fue 100% exitoso o no hay filas procesadas');
+            }
             return result;
         }
         catch (error) {
@@ -284,28 +314,33 @@ class FileProcessorService {
     async processExcel(filePath, summary, importOptions) {
         var _a, _b;
         try {
-            const sheetName = importOptions === null || importOptions === void 0 ? void 0 : importOptions.sheetName;
-            const skipRows = (importOptions === null || importOptions === void 0 ? void 0 : importOptions.skipRows) || 0;
-            const hasHeaders = (importOptions === null || importOptions === void 0 ? void 0 : importOptions.hasHeaders) !== false;
             // Leer archivo Excel
-            const rows = await (0, node_1.default)(filePath);
+            const workbook = XLSX.readFile(filePath);
+            // Usar el nombre de hoja especificado o la primera hoja disponible
+            const availableSheets = workbook.SheetNames;
+            const targetSheetName = (importOptions === null || importOptions === void 0 ? void 0 : importOptions.sheetName) || availableSheets[0];
+            const sheet = workbook.Sheets[targetSheetName];
+            if (!sheet) {
+                throw new Error(`Hoja "${targetSheetName}" no encontrada. Hojas disponibles: ${availableSheets.join(', ')}`);
+            }
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             if (!rows || rows.length === 0) {
                 throw new Error('El archivo Excel está vacío');
             }
             // Actualizar metadata con información básica
             if (summary.metadata) {
-                summary.metadata.sheets = ['Sheet1']; // Por defecto, solo procesamos la primera hoja
+                summary.metadata.sheets = [targetSheetName]; // Por defecto, solo procesamos la primera hoja
             }
             const results = [];
             let headers = [];
             for (let i = 0; i < rows.length; i++) {
                 // Saltar filas según configuración
-                if (i < skipRows) {
+                if (i < ((importOptions === null || importOptions === void 0 ? void 0 : importOptions.skipRows) || 0)) {
                     continue;
                 }
                 const row = rows[i];
                 // Primera fila después de skip podría ser headers
-                if (hasHeaders && i === skipRows) {
+                if (((importOptions === null || importOptions === void 0 ? void 0 : importOptions.hasHeaders) !== false) && i === ((importOptions === null || importOptions === void 0 ? void 0 : importOptions.skipRows) || 0)) {
                     headers = row.map(cell => String(cell || '')).filter(h => h.trim() !== '');
                     summary.headers = headers;
                     // Detectar banco basado en headers
@@ -418,31 +453,72 @@ class FileProcessorService {
         }
     }
     /**
-     * Descarga un archivo desde la colección uploaded_files (alternativa a GridFS)
+     * Descarga un archivo desde GridFS
      */
     async downloadFileFromGridFS(fileId, destinationPath) {
         const db = mongodb_service_1.default.getDB();
-        const filesCollection = db.collection('uploaded_files');
+        const bucket = new mongodb_1.GridFSBucket(db, { bucketName: 'fs' });
         try {
-            // Buscar el archivo por ObjectId
-            const file = await filesCollection.findOne({ _id: new mongodb_1.ObjectId(fileId) });
-            if (!file) {
-                throw new fintech_personal_common_1.AppError(`Archivo no encontrado: ${fileId}`, 404);
+            // Verificar que el archivo existe en GridFS
+            const files = await db.collection('fs.files').find({
+                _id: new mongodb_1.ObjectId(fileId)
+            }).toArray();
+            if (files.length === 0) {
+                throw new fintech_personal_common_1.AppError(`Archivo no encontrado en GridFS: ${fileId}`, 404);
             }
-            if (!file.data) {
-                throw new fintech_personal_common_1.AppError(`Archivo sin datos: ${fileId}`, 400);
-            }
-            // Convertir de base64 a buffer
-            const fileBuffer = Buffer.from(file.data, 'base64');
-            // Escribir archivo al destino
-            fs.writeFileSync(destinationPath, fileBuffer);
-            logger_1.default.info(`Archivo descargado: ${file.filename} (${fileBuffer.length} bytes) -> ${destinationPath}`);
+            const file = files[0];
+            // Crear stream de descarga desde GridFS
+            const downloadStream = bucket.openDownloadStream(new mongodb_1.ObjectId(fileId));
+            const writeStream = fs.createWriteStream(destinationPath);
+            // Usar promesa para esperar la descarga completa
+            await new Promise((resolve, reject) => {
+                downloadStream.on('error', reject);
+                writeStream.on('error', reject);
+                writeStream.on('finish', resolve);
+                downloadStream.pipe(writeStream);
+            });
+            logger_1.default.info({
+                fileId,
+                fileName: file.filename,
+                size: file.length,
+                destinationPath
+            }, 'Archivo descargado desde GridFS exitosamente');
         }
         catch (error) {
             if (error instanceof fintech_personal_common_1.AppError) {
                 throw error;
             }
-            throw new fintech_personal_common_1.AppError(`Error al descargar archivo: ${error instanceof Error ? error.message : String(error)}`, 500);
+            throw new fintech_personal_common_1.AppError(`Error al descargar archivo desde GridFS: ${error instanceof Error ? error.message : String(error)}`, 500);
+        }
+    }
+    /**
+     * Elimina un archivo de GridFS
+     */
+    async deleteFileFromGridFS(fileId) {
+        const db = mongodb_service_1.default.getDB();
+        const bucket = new mongodb_1.GridFSBucket(db, { bucketName: 'fs' });
+        try {
+            // Verificar que el archivo existe antes de intentar eliminarlo
+            const files = await db.collection('fs.files').find({
+                _id: new mongodb_1.ObjectId(fileId)
+            }).toArray();
+            if (files.length === 0) {
+                throw new fintech_personal_common_1.AppError(`Archivo no encontrado en GridFS: ${fileId}`, 404);
+            }
+            const file = files[0];
+            // Eliminar archivo usando GridFSBucket
+            await bucket.delete(new mongodb_1.ObjectId(fileId));
+            logger_1.default.info({
+                fileId,
+                fileName: file.filename,
+                size: file.length
+            }, 'Archivo eliminado de GridFS exitosamente');
+        }
+        catch (error) {
+            if (error instanceof fintech_personal_common_1.AppError) {
+                throw error;
+            }
+            throw new fintech_personal_common_1.AppError(`Error al eliminar archivo de GridFS: ${error instanceof Error ? error.message : String(error)}`, 500);
         }
     }
     /**
