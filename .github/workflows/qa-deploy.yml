@@ -24,22 +24,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'npm'
           registry-url: 'https://verdaccio.liontechsolution.com/'
 
-      - name: Configure npm for Verdaccio
+      - name: Install ESLint dependencies only
         run: |
-          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
-          echo "always-auth=false" >> .npmrc
-
-      - name: Install dependencies
-        run: npm ci
+          npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
+          cp -r node_modules node_modules_eslint
 
       - name: Lint code
         run: npm run lint
@@ -82,19 +79,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'npm'
           registry-url: 'https://verdaccio.liontechsolution.com/'
-
-      - name: Configure npm for Verdaccio
-        run: |
-          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
-          echo "always-auth=false" >> .npmrc
 
       - name: Install dependencies
         run: npm ci
@@ -140,19 +132,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'npm'
           registry-url: 'https://verdaccio.liontechsolution.com/'
-
-      - name: Configure npm for Docker build
-        run: |
-          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
-          echo "always-auth=false" >> .npmrc
 
       - name: Set up QEMU for multi-architecture builds
         uses: docker/setup-qemu-action@v3
@@ -254,7 +241,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout ArgoCD repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           repository: ${{ github.repository_owner }}/fintech-argocd-config
           token: ${{ secrets.ARGOCD_REPO_TOKEN }}
