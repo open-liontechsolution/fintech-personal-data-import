@@ -1,0 +1,267 @@
+name: Development Pipeline
+
+on:
+  push:
+    branches: [ develop ]
+    paths-ignore:
+      - 'helm/**'
+      - 'argocd/**'
+      - 'README.md'
+      - 'USAGE.md'
+      - 'QUICK_START_GUIDE.md'
+      - '.gitignore'
+      - 'scripts/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  K8S_ENVIRONMENT: dev
+  NAMESPACE: fintech-dev
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          registry-url: 'https://verdaccio.liontechsolution.com/'
+
+      - name: Configure npm for Verdaccio
+        run: |
+          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
+          echo "always-auth=false" >> .npmrc
+
+      - name: Install ESLint dependencies only
+        run: |
+          npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
+          cp -r node_modules node_modules_eslint
+
+      - name: Lint code
+        run: npm run lint
+        
+      - name: Install full dependencies
+        run: npm ci
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+          MONGO_INITDB_DATABASE: fintech_test
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      rabbitmq:
+        image: rabbitmq:3.12-management
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          registry-url: 'https://verdaccio.liontechsolution.com/'
+
+      - name: Configure npm for Verdaccio
+        run: |
+          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
+          echo "always-auth=false" >> .npmrc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for MongoDB..."
+          timeout 60 sh -c 'until nc -z localhost 27017; do sleep 1; done'
+          echo "Waiting for RabbitMQ..."
+          timeout 60 sh -c 'until nc -z localhost 5672; do sleep 1; done'
+          sleep 5
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://admin:admin123@localhost:27017/fintech_test?authSource=admin
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672
+          RABBITMQ_EXCHANGE: test-file-upload-exchange
+          RABBITMQ_QUEUE: test-file-import-queue
+          RABBITMQ_ROUTING_KEY: file.uploaded
+          DELETE_AFTER_PROCESSING: false
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      IMAGE_TAG: ${{ steps.imagetag.outputs.IMAGE_TAG }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          registry-url: 'https://verdaccio.liontechsolution.com/'
+
+      - name: Configure npm for Docker build
+        run: |
+          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
+          echo "always-auth=false" >> .npmrc
+
+      - name: Set up QEMU for multi-architecture builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: 'arm64,amd64'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        id: imagetag
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "IMAGE_TAG=dev-${SHORT_SHA}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
+            org.opencontainers.image.title=fintech-personal-data-import
+            org.opencontainers.image.description=Microservicio para importación de datos financieros
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  cleanup-old-images:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete old container images
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const packageName = repo.toLowerCase();
+            
+            try {
+              const response = await github.request('GET /users/{owner}/packages/container/{package_name}/versions', {
+                owner: owner,
+                package_name: packageName,
+                per_page: 100
+              });
+              
+              const versions = response.data;
+              const devVersions = versions.filter(v => 
+                v.metadata && v.metadata.container && v.metadata.container.tags.some(tag => tag.startsWith('dev-'))
+              );
+              
+              // Keep only the 5 most recent dev versions
+              const versionsToDelete = devVersions.slice(5);
+              
+              for (const version of versionsToDelete) {
+                try {
+                  await github.request('DELETE /users/{owner}/packages/container/{package_name}/versions/{package_version_id}', {
+                    owner: owner,
+                    package_name: packageName,
+                    package_version_id: version.id
+                  });
+                  console.log(`Deleted version ${version.id}`);
+                } catch (error) {
+                  console.log(`Failed to delete version ${version.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              console.log(`Error managing container versions: ${error.message}`);
+            }
+
+  update-argocd-dev:
+    needs: [build-and-push, cleanup-old-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout ArgoCD repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/fintech-argocd-config
+          token: ${{ secrets.ARGOCD_REPO_TOKEN }}
+          path: argocd-config
+
+      - name: Update development image tag
+        run: |
+          cd argocd-config
+          # Update the image tag in the development overlay
+          IMAGE_TAG=${{ needs.build-and-push.outputs.IMAGE_TAG }}
+          
+          # Update kustomization.yaml or values file for dev environment
+          if [ -f "overlays/dev/fintech-personal-data-import/kustomization.yaml" ]; then
+            sed -i "s|newTag:.*|newTag: ${IMAGE_TAG}|g" overlays/dev/fintech-personal-data-import/kustomization.yaml
+          elif [ -f "environments/dev/fintech-personal-data-import/values.yaml" ]; then
+            sed -i "s|tag:.*|tag: ${IMAGE_TAG}|g" environments/dev/fintech-personal-data-import/values.yaml
+          fi
+          
+          # Commit and push changes
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update fintech-personal-data-import dev image to ${IMAGE_TAG}" || exit 0
+          git push

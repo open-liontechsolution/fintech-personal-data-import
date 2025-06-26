@@ -1,1 +1,58 @@
-node_modules
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.pnpm-debug.log
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Directorio de compilación
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Archivos temporales
+.tmp/
+.temp/
+tmp/
+
+# Archivos de cobertura
+coverage/
+
+# Archivos de IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Directorios específicos del microservicio data-import
+uploads/
+downloaded_files/
+
+# Jest
+jest-coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# sealed secrets
+secret-*
+
+# Docker
+.dockerignore.bak
+
+# Archivos de ejemplo que no deben ir al repo
+example/*.xls
+example/*.xlsx
+example/*.csv

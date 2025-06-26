@@ -1,33 +1,67 @@
-name: CI/CD Pipeline
+name: Continuous Integration
 
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, qa ]
+    paths-ignore:
+      - 'helm/**'
+      - 'argocd/**'
+      - 'README.md'
+      - 'USAGE.md'
+      - 'QUICK_START_GUIDE.md'
+      - '.gitignore'
+      - 'scripts/**'
 
 jobs:
-  build-and-publish:
+  lint-and-test:
     runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+          MONGO_INITDB_DATABASE: fintech_test
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      rabbitmq:
+        image: rabbitmq:3.12-management
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
+          registry-url: 'https://verdaccio.liontechsolution.com/'
       
       - name: Configure npm for Verdaccio
         run: |
-          if [ -n "${{ secrets.VERDACCIO_REGISTRY_URL }}" ]; then
-            echo "registry=${{ secrets.VERDACCIO_REGISTRY_URL }}" > .npmrc
-          fi
+          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
+          echo "always-auth=false" >> .npmrc
       
       - name: Install dependencies
         run: npm ci
@@ -35,78 +69,55 @@ jobs:
       - name: Run linting
         run: npm run lint
       
-      - name: Run tests
-        run: npm test
-      
       - name: Build TypeScript
         run: npm run build
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/fintech-personal-data-import
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,format=short
-      
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
 
-  semantic-release:
-    needs: build-and-publish
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
+      - name: Wait for services
+        run: |
+          echo "Waiting for MongoDB..."
+          timeout 60 sh -c 'until nc -z localhost 27017; do sleep 1; done'
+          echo "Waiting for RabbitMQ..."
+          timeout 60 sh -c 'until nc -z localhost 5672; do sleep 1; done'
+          sleep 5
       
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://admin:admin123@localhost:27017/fintech_test?authSource=admin
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672
+          RABBITMQ_EXCHANGE: test-file-upload-exchange
+          RABBITMQ_QUEUE: test-file-import-queue
+          RABBITMQ_ROUTING_KEY: file.uploaded
+          DELETE_AFTER_PROCESSING: false
+
+  security-check:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-          
+          registry-url: 'https://verdaccio.liontechsolution.com/'
+
       - name: Configure npm for Verdaccio
         run: |
-          if [ -n "${{ secrets.VERDACCIO_REGISTRY_URL }}" ]; then
-            echo "registry=${{ secrets.VERDACCIO_REGISTRY_URL }}" > .npmrc
-          fi
-          
+          echo "registry=https://verdaccio.liontechsolution.com/" > .npmrc
+          echo "always-auth=false" >> .npmrc
+
       - name: Install dependencies
         run: npm ci
-        
-      - name: Semantic Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+
+      - name: Run security audit
+        run: npm audit --audit-level moderate
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'

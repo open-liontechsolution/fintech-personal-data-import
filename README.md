@@ -178,6 +178,74 @@ Este microservicio consume la biblioteca `fintech-personal-common` que proporcio
 
 Las dependencias entre este servicio y la biblioteca común se gestionan automáticamente mediante el sistema de versionado semántico.
 
+## CI/CD Pipeline
+
+This project uses GitHub Actions for automated testing, building, and deployment across multiple environments.
+
+### Workflows Overview
+
+| Workflow | Trigger | Purpose | Environment |
+|----------|---------|---------|-------------|
+| `ci.yml` | Pull Requests | Code validation and testing | N/A |
+| `dev-deploy.yml` | Push to `develop` | Deploy to development | Development |
+| `qa-deploy.yml` | Push to `qa`, `release/*` | Deploy to QA | QA/Staging |
+| `prod-deploy.yml` | Tags `v*`, Manual | Deploy to production | Production |
+
+### Pipeline Features
+
+- ✅ **Automated Testing**: Unit and integration tests with MongoDB and RabbitMQ
+- ✅ **Security Scanning**: Vulnerability scanning with Trivy and npm audit
+- ✅ **Multi-Architecture Builds**: Support for AMD64 and ARM64 architectures
+- ✅ **Container Registry**: Automated push to GitHub Container Registry
+- ✅ **ArgoCD Integration**: Automatic GitOps deployment updates
+- ✅ **Dependency Management**: Automated dependency updates with Dependabot
+- ✅ **Code Coverage**: Coverage reports with Codecov integration
+- ✅ **Release Management**: Automated GitHub releases for production deployments
+
+### Container Images
+
+All images are published to GitHub Container Registry:
+
+```bash
+# Development images
+ghcr.io/[owner]/fintech-personal-data-import:dev-[short-sha]
+
+# QA images  
+ghcr.io/[owner]/fintech-personal-data-import:qa-[short-sha]
+ghcr.io/[owner]/fintech-personal-data-import:[branch-name]-[short-sha]
+
+# Production images
+ghcr.io/[owner]/fintech-personal-data-import:[version]
+ghcr.io/[owner]/fintech-personal-data-import:latest
+```
+
+### Environment Configuration
+
+Each pipeline uses specific environment configurations:
+
+**Test Environment:**
+- MongoDB 6.0 with authentication
+- RabbitMQ 3.12 with management plugin
+- Isolated test database and queues
+- DELETE_AFTER_PROCESSING=false
+
+**Production Builds:**
+- Multi-architecture support (AMD64, ARM64)
+- Security scanning and vulnerability assessment
+- Automated image cleanup policies
+- GitOps deployment with ArgoCD
+
+### Setup Requirements
+
+To use the CI/CD pipeline, configure these GitHub secrets:
+
+- `ARGOCD_REPO_TOKEN`: Token for ArgoCD repository access
+- `CODECOV_TOKEN`: Token for code coverage reports (optional)
+
+### Documentation
+
+For detailed information about the CI/CD setup, see [docs/github-actions.md](docs/github-actions.md).
+
 ## License
 
 Private - All rights reserved
