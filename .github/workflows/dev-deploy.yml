@@ -40,8 +40,11 @@ jobs:
 
       - name: Install ESLint dependencies only
         run: |
-          npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
+          npm config set registry https://registry.npmjs.org/
+          npm install --no-save eslint@8.37.0 @typescript-eslint/eslint-plugin@5.57.1 @typescript-eslint/parser@5.57.1 typescript@5.0.3
+          npm config set registry https://verdaccio.liontechsolution.com/
           cp -r node_modules node_modules_eslint
+        timeout-minutes: 10
 
       - name: Lint code
         run: npm run lint
