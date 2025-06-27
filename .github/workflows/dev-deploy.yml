@@ -33,15 +33,10 @@ jobs:
           cache: 'npm'
           registry-url: 'https://verdaccio.liontechsolution.com/'
 
-      # - name: Configure npm authentication
-      #   run: |
-      #     echo "//verdaccio.liontechsolution.com/:_authToken=$(echo -n '${{ secrets.VERDACCIO_USERNAME }}:${{ secrets.VERDACCIO_PASSWORD }}' | base64)" > .npmrc
-      #     echo "registry=https://verdaccio.liontechsolution.com/" >> .npmrc
-      #     echo "always-auth=true" >> .npmrc
-
       - name: Install ESLint dependencies only
         run: |
           npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
+          # Copiar los node_modules instalados a un directorio para cache rápido
           cp -r node_modules node_modules_eslint
 
       - name: Lint code
