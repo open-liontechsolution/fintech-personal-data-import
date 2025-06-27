@@ -35,6 +35,7 @@ jobs:
 
       - name: Install ESLint dependencies only
         run: |
+          npm config set loglevel silly
           npm install --no-save eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser typescript
           # Copiar los node_modules instalados a un directorio para cache rápido
           cp -r node_modules node_modules_eslint
