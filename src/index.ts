@@ -1,8 +1,8 @@
 import express from 'express';
 import { createServer } from 'http';
 import multer from 'multer';
-import { GridFSBucket, ObjectId } from 'mongodb';
-import { v4 as uuidv4 } from 'uuid';
+import { GridFSBucket as _GridFSBucket, ObjectId as _ObjectId } from 'mongodb';
+import { v4 as _uuidv4 } from 'uuid';
 import config from './config/config';
 import logger from './utils/logger';
 import { RabbitMQService, MongoDBService } from './services';
