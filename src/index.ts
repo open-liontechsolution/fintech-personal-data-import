@@ -227,7 +227,7 @@ class DataImportApp {
     });
 
     // Error handler
-    this.app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    this.app.use((error: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
       logger.error({ error, url: req.url, method: req.method }, 'Unhandled error');
       
       if (!res.headersSent) {

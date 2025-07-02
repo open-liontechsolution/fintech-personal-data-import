@@ -1,4 +1,4 @@
-import { ObjectId } from 'mongodb';
+import { ObjectId as _ObjectId } from 'mongodb';
 
 /**
  * Modelo para almacenar datos crudos importados desde archivos financieros

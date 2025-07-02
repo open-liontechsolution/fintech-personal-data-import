@@ -1,11 +1,11 @@
-import { GridFSBucket, ObjectId, Db } from 'mongodb';
+import { GridFSBucket, ObjectId, Db as _Db } from 'mongodb';
 import * as fs from 'fs';
 import * as path from 'path';
 import csvParser from 'csv-parser';
 import * as XLSX from 'xlsx';
-import { Readable } from 'stream';
+import { Readable as _Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
-import { AppError, FileUploadedEvent, FileImportStatusUpdateEvent } from 'fintech-personal-common';
+import { AppError, FileUploadedEvent, FileImportStatusUpdateEvent as _FileImportStatusUpdateEvent } from 'fintech-personal-common';
 import MongoDBService from './mongodb.service';
 import logger from '../utils/logger';
 import config from '../config/config';
@@ -183,7 +183,7 @@ class FileProcessorService {
       const skipRows = importOptions?.skipRows || 0;
       const hasHeaders = importOptions?.hasHeaders !== false; // Por defecto asume que hay headers
 
-      const stream = fs.createReadStream(filePath)
+      const _stream = fs.createReadStream(filePath)
         .pipe(csvParser({
           headers: false, // Manejamos headers manualmente
           separator: importOptions?.delimiter || ','
