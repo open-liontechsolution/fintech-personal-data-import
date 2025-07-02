@@ -9,9 +9,9 @@ nameOverride: ""
 fullnameOverride: "fintech-personal-data-import"
 
 serviceAccount:
-  create: true
+  create: false
   annotations: {}
-  name: "fintech-personal-data-import-sa"
+  name: "default"
 
 podAnnotations: {}
 
