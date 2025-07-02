@@ -233,33 +233,76 @@ jobs:
   update-argocd-dev:
     needs: [build-and-push, cleanup-old-images]
     runs-on: ubuntu-latest
+    # Añadir permisos de escritura para permitir push al repositorio
     permissions:
       contents: write
-      pull-requests: write
+    outputs:
+      image_tag: ${{ needs.build-and-push.outputs.IMAGE_TAG }}
     steps:
-      - name: Checkout ArgoCD repository
+      - name: Checkout
         uses: actions/checkout@v3
         with:
-          repository: ${{ github.repository_owner }}/fintech-argocd-config
-          token: ${{ secrets.ARGOCD_REPO_TOKEN }}
-          path: argocd-config
+          ref: develop
 
-      - name: Update development image tag
+      - name: Get image tag from previous job
+        id: imagetag
         run: |
-          cd argocd-config
-          # Update the image tag in the development overlay
-          IMAGE_TAG=${{ needs.build-and-push.outputs.IMAGE_TAG }}
+          # Obtener la etiqueta directamente del job build-and-push
+          IMAGE_TAG="${{ needs.build-and-push.outputs.IMAGE_TAG }}"
           
-          # Update kustomization.yaml or values file for dev environment
-          if [ -f "overlays/dev/fintech-personal-data-import/kustomization.yaml" ]; then
-            sed -i "s|newTag:.*|newTag: ${IMAGE_TAG}|g" overlays/dev/fintech-personal-data-import/kustomization.yaml
-          elif [ -f "environments/dev/fintech-personal-data-import/values.yaml" ]; then
-            sed -i "s|tag:.*|tag: ${IMAGE_TAG}|g" environments/dev/fintech-personal-data-import/values.yaml
+          # Verificar que la etiqueta no esté vacía
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "ERROR: No se pudo obtener IMAGE_TAG del job build-and-push"
+            # Intentar obtener la etiqueta de la variable de entorno como respaldo
+            IMAGE_TAG="${{ env.IMAGE_TAG }}"
+            if [ -z "$IMAGE_TAG" ]; then
+              echo "ERROR: Tampoco se pudo obtener IMAGE_TAG de las variables de entorno"
+              exit 1
+            fi
+            echo "Usando etiqueta de respaldo: $IMAGE_TAG"
+          else
+            echo "Usando etiqueta del job build-and-push: $IMAGE_TAG"
           fi
           
-          # Commit and push changes
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update fintech-personal-data-import dev image to ${IMAGE_TAG}" || exit 0
-          git push
+          # Establecer la etiqueta para los siguientes pasos
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update Helm values for dev environment
+        run: |
+          # Obtener la etiqueta de imagen del paso anterior
+          IMAGE_TAG="${{ steps.imagetag.outputs.IMAGE_TAG }}"
+          
+          # Verificar que la etiqueta no esté vacía
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "ERROR: Variable IMAGE_TAG está vacía"
+            exit 1
+          fi
+          
+          # Actualizar la etiqueta de imagen en el archivo values-dev.yaml de Helm
+          if [ -f "helm/environments/dev/values-dev.yaml" ]; then
+            # Actualizar la etiqueta de imagen usando sed
+            echo "Actualizando la etiqueta de imagen en helm/environments/dev/values-dev.yaml a: ${IMAGE_TAG}"
+            
+            # Usar sed para actualizar el tag
+            sed -i "s|tag: \".*\"|tag: \"${IMAGE_TAG}\"|" helm/environments/dev/values-dev.yaml
+            
+            # Verificar que se haya actualizado correctamente
+            grep "tag:" helm/environments/dev/values-dev.yaml
+          else
+            echo "ERROR: No se encontró el archivo helm/environments/dev/values-dev.yaml"
+            exit 1
+          fi
+          
+          # Confirmar y subir los cambios
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add helm/environments/dev/values-dev.yaml
+          
+          git commit -m "Update image tag to ${IMAGE_TAG} for dev environment"
+          git push origin develop
+          
+      - name: Wait for ArgoCD sync
+        run: |
+          echo "Los cambios han sido enviados al repositorio. ArgoCD sincronizará automáticamente los cambios."
+          echo "Puedes verificar el estado del despliegue en la UI de ArgoCD."
