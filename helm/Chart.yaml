@@ -1,5 +1,5 @@
 apiVersion: v2
-name: fintech-personal-data-import
+name: fintech-data-import
 description: Microservicio para la importación de datos financieros
 type: application
 version: 0.1.0
