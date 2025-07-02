@@ -25,7 +25,7 @@ describe('Upload Controller', () => {
         .send({});
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('No file uploaded');
+      expect(response.body.error).toBe('No file provided');
     });
 
     it('should handle file upload successfully', async () => {
