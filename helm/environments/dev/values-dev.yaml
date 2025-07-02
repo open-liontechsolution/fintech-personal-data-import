@@ -1,3 +1,5 @@
+# Valores específicos para el entorno de desarrollo
+appName: fintech-data-import
 replicaCount: 1
 
 image:
