@@ -12,8 +12,7 @@ spec:
     helm:
       valueFiles:
         - environments/dev/values-dev.yaml
-        - environments/dev/rabbitmq-credentials-sealed.yaml
-        - environments/dev/mongodb-credentials-sealed.yaml
+        - environments/dev/sealedsecrets-values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: fintech-dev
