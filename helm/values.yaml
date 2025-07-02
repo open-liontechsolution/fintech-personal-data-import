@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ${CONTAINER_REGISTRY}/fintech-personal-data-import
+  repository: ghcr.io/open-liontechsolution/fintech-personal-data-import
   tag: "latest"
   pullPolicy: Always
 

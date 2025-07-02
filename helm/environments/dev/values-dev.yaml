@@ -1,7 +1,6 @@
 replicaCount: 1
 
 image:
-  repository: ${CONTAINER_REGISTRY}/fintech-personal-data-import
   tag: "dev-aa55edf"
   pullPolicy: Always
 
