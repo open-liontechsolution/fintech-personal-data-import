@@ -476,11 +476,11 @@ class FileProcessorService {
    */
   private async downloadFileFromGridFS(fileId: string, destinationPath: string): Promise<void> {
     const db = MongoDBService.getDB();
-    const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+    const bucket = new GridFSBucket(db, { bucketName: 'uploads' });
     
     try {
       // Verificar que el archivo existe en GridFS
-      const files = await db.collection('fs.files').find({ 
+      const files = await db.collection('uploads.files').find({ 
         _id: new ObjectId(fileId) 
       }).toArray();
       
@@ -523,11 +523,11 @@ class FileProcessorService {
    */
   private async deleteFileFromGridFS(fileId: string): Promise<void> {
     const db = MongoDBService.getDB();
-    const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+    const bucket = new GridFSBucket(db, { bucketName: 'uploads' });
     
     try {
       // Verificar que el archivo existe antes de intentar eliminarlo
-      const files = await db.collection('fs.files').find({ 
+      const files = await db.collection('uploads.files').find({ 
         _id: new ObjectId(fileId) 
       }).toArray();
       
