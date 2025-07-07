@@ -3,7 +3,7 @@ appName: fintech-data-import
 replicaCount: 1
 
 image:
-  tag: "dev-aa55edf"
+  tag: "dev-71b5b98"
   pullPolicy: Always
 
 nameOverride: ""
